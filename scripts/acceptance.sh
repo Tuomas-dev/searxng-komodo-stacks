@@ -50,7 +50,15 @@ for _ in $(seq 1 60); do
   fi
   sleep 2
 done
-[ "$ready" = true ]
+if [ "$ready" != true ]; then
+  printf 'Readiness timed out: searxng=%s ingress=%s\n' \
+    "$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$searxng_id")" \
+    "$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$ingress_id")" >&2
+  docker inspect --format '{{json .State.Health}}' "$searxng_id" >&2 || true
+  docker inspect --format '{{json .State.Health}}' "$ingress_id" >&2 || true
+  docker compose -p "$project" logs --no-color >&2 || true
+  exit 1
+fi
 
 # The SearXNG service itself must have no host port publication.
 python3 - "$searxng_id" <<'PY'
