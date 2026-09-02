@@ -23,10 +23,10 @@ The values are not stored in Git. Each Komodo Stack uses its own Compose project
 
 - SearXNG is never directly published; Caddy is the only host listener.
 - Caddy admits loopback plus exactly one configured source CIDR and returns HTTP 403 to every other source.
-- No Caddy access log is enabled, preventing query strings from entering proxy logs.
+- No Caddy access log is enabled. SearXNG uses Docker's `none` log driver because upstream-request failures are logged with full `q=` values at WARNING; health and sanitized JSON probes are the normal diagnostics.
 - SearXNG enables JSON output only, disables autocomplete, image proxy, public-instance mode, limiter, and metrics.
 - Images are pinned by multi-architecture manifest digest.
-- Containers drop capabilities, set `no-new-privileges`, apply resource limits, and rotate bounded runtime logs.
+- Containers drop capabilities, set `no-new-privileges`, and apply resource limits; the ingress keeps bounded rotating diagnostic logs while SearXNG retains none.
 
 SearXNG is search-only in Hermes. Configure `web.search_backend: searxng`; select `web.extract_backend` independently.
 

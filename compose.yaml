@@ -35,10 +35,10 @@ services:
     mem_limit: 1g
     cpus: 1.5
     logging:
-      driver: local
-      options:
-        max-size: 10m
-        max-file: "3"
+      # SearXNG logs failed upstream URLs at WARNING, including the full q=
+      # search term. Disable runtime log retention to keep Hermes queries out
+      # of Docker/Komodo logs; health and JSON probes are the support surface.
+      driver: none
 
   ingress:
     image: docker.io/library/caddy@sha256:4c6e91c6ed0e2fa03efd5b44747b625fec79bc9cd06ac5235a779726618e530d
