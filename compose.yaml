@@ -83,6 +83,9 @@ services:
 networks:
   search:
     driver: bridge
+    ipam:
+      config:
+        - subnet: ${SEARCH_SUBNET:?SEARCH_SUBNET is required}
 
 volumes:
   searxng-cache:

@@ -17,7 +17,8 @@ marker="hermes-searxng-canary-${RANDOM}-$$"
 
 export BIND_ADDRESS=127.0.0.1
 export PUBLISHED_PORT="$port"
-export ALLOWED_CIDR=127.0.0.1/32
+export SEARCH_SUBNET=10.253.250.0/24
+export ALLOWED_CIDR="$SEARCH_SUBNET"
 export SEARXNG_SECRET
 SEARXNG_SECRET=$(python3 -c 'import secrets; print(secrets.token_urlsafe(48))')
 
@@ -74,37 +75,35 @@ if value not in (None, {}):
     raise SystemExit(f"SearXNG unexpectedly publishes host ports: {value}")
 PY
 
-# An allowlisted loopback request must return valid JSON and real results.
-python3 - "$port" "$marker" <<'PY'
+# An allowlisted peer on the stack network must return valid JSON and real results.
+search_json=$(docker run --rm \
+  --network "$network" \
+  --entrypoint sh \
+  docker.io/library/caddy@sha256:4c6e91c6ed0e2fa03efd5b44747b625fec79bc9cd06ac5235a779726618e530d \
+  -c "wget -qO- 'http://ingress:8080/search?q=OpenAI%20Hermes%20${marker}&format=json'")
+python3 - "$search_json" <<'PY'
 import json
 import sys
-import urllib.parse
-import urllib.request
-port, marker = sys.argv[1:]
-query = f"OpenAI Hermes {marker}"
-url = f"http://127.0.0.1:{port}/search?" + urllib.parse.urlencode({"q": query, "format": "json"})
-with urllib.request.urlopen(url, timeout=30) as response:
-    if response.status != 200:
-        raise SystemExit(f"unexpected status {response.status}")
-    payload = json.load(response)
+payload = json.loads(sys.argv[1])
 results = payload.get("results")
 if not isinstance(results, list) or not results:
     raise SystemExit("JSON search returned no results")
 print(f"JSON_SEARCH_RESULTS={len(results)}")
 PY
 
-# A non-allowlisted container on the same network must be rejected with 403.
-deny_output=$(docker run --rm \
-  --network "$network" \
-  --entrypoint sh \
-  docker.io/library/caddy@sha256:4c6e91c6ed0e2fa03efd5b44747b625fec79bc9cd06ac5235a779726618e530d \
-  -c 'wget -S -O /dev/null http://ingress:8080/healthz' 2>&1 || true)
-python3 - "$deny_output" <<'PY'
+# A host-origin request is outside the allowlisted stack subnet and must get 403.
+python3 - "$port" <<'PY'
 import sys
-text = sys.argv[1]
-if "403" not in text:
-    raise SystemExit("non-allowlisted request did not return HTTP 403")
-print("NON_ALLOWLISTED_HTTP=403")
+import urllib.error
+import urllib.request
+try:
+    urllib.request.urlopen(f"http://127.0.0.1:{sys.argv[1]}/healthz", timeout=10)
+except urllib.error.HTTPError as exc:
+    if exc.code != 403:
+        raise SystemExit(f"non-allowlisted request returned HTTP {exc.code}, expected 403")
+    print("NON_ALLOWLISTED_HTTP=403")
+else:
+    raise SystemExit("non-allowlisted request unexpectedly succeeded")
 PY
 
 # The synthetic query must not be retained in container logs.

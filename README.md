@@ -13,10 +13,11 @@ Komodo supplies a separate environment to each stack:
 BIND_ADDRESS=<Swamp Systems LAN address>
 PUBLISHED_PORT=<unique host port>
 ALLOWED_CIDR=<single Hermes VM address>/32
+SEARCH_SUBNET=<unique per-stack private Docker subnet>
 SEARXNG_SECRET=<unique random value>
 ```
 
-The values are not stored in Git. Each Komodo Stack uses its own Compose project name, named volume, bridge network, and environment file.
+The values are not stored in Git. Each Komodo Stack uses its own Compose project name, named volume, explicitly non-overlapping bridge subnet, and environment file.
 
 ## Security properties
 
