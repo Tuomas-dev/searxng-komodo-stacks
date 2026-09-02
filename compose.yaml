@@ -1,0 +1,86 @@
+services:
+  searxng:
+    image: docker.io/searxng/searxng@sha256:b36af7984b87191b595bc5301418ed6432c047668a4547ab531a7439b816fac3
+    restart: unless-stopped
+    environment:
+      SEARXNG_SECRET: ${SEARXNG_SECRET:?SEARXNG_SECRET is required}
+      SEARXNG_BASE_URL: http://searxng:8080/
+      SEARXNG_LIMITER: "false"
+      SEARXNG_PUBLIC_INSTANCE: "false"
+      SEARXNG_IMAGE_PROXY: "false"
+    volumes:
+      - ./settings.yml:/etc/searxng/settings.yml:ro
+      - searxng-cache:/var/cache/searxng
+    expose:
+      - "8080"
+    networks:
+      - search
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "--proxy=off", "http://127.0.0.1:8080/healthz"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    pids_limit: 256
+    mem_limit: 1g
+    cpus: 1.5
+    logging:
+      driver: local
+      options:
+        max-size: 10m
+        max-file: "3"
+
+  ingress:
+    image: docker.io/library/caddy@sha256:4c6e91c6ed0e2fa03efd5b44747b625fec79bc9cd06ac5235a779726618e530d
+    restart: unless-stopped
+    environment:
+      ALLOWED_CIDR: ${ALLOWED_CIDR:?ALLOWED_CIDR is required}
+    ports:
+      - ${BIND_ADDRESS:?BIND_ADDRESS is required}:${PUBLISHED_PORT:?PUBLISHED_PORT is required}:8080
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+    networks:
+      - search
+    depends_on:
+      searxng:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/healthz"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /data:rw,noexec,nosuid,size=16m
+      - /config:rw,noexec,nosuid,size=4m
+      - /tmp:rw,noexec,nosuid,size=8m
+    pids_limit: 64
+    mem_limit: 128m
+    cpus: 0.25
+    logging:
+      driver: local
+      options:
+        max-size: 5m
+        max-file: "2"
+
+networks:
+  search:
+    driver: bridge
+
+volumes:
+  searxng-cache:

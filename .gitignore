@@ -1,0 +1,6 @@
+# Runtime-only values are materialized by Komodo and must never be committed.
+.env
+*.env
+
+# Local/test residue
+.evidence/
