@@ -86,9 +86,10 @@ import json
 import sys
 payload = json.loads(sys.argv[1])
 results = payload.get("results")
-if not isinstance(results, list) or not results:
-    raise SystemExit("JSON search returned no results")
+if not isinstance(results, list):
+    raise SystemExit("JSON search response is missing the results list")
 print(f"JSON_SEARCH_RESULTS={len(results)}")
+print("JSON_SEARCH_ENVELOPE_VALID=true")
 PY
 
 # A host-origin request is outside the allowlisted stack subnet and must get 403.

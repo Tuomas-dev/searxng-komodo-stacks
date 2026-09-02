@@ -38,4 +38,4 @@ Run the repository-owned acceptance harness on an isolated Docker host:
 ./scripts/acceptance.sh
 ```
 
-It renders Compose, starts an isolated project, proves health and JSON search, proves a non-allowlisted container gets HTTP 403, confirms SearXNG has no host port, checks that a synthetic query is absent from container logs, and verifies complete cleanup.
+It renders Compose, starts an isolated project, proves health and the JSON search response contract, proves a non-allowlisted request gets HTTP 403, confirms SearXNG has no host port, checks that a synthetic query is absent from container logs, and verifies complete cleanup. The isolated testbench may receive zero results because search engines commonly block datacenter egress; each live residential deployment must separately return at least one real result before acceptance.
