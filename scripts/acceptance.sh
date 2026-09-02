@@ -6,6 +6,7 @@ cd "$repo_root"
 
 project="searxng-acceptance-${RANDOM}-$$"
 network="${project}_search"
+untrusted_network="${project}_untrusted"
 port=$(python3 - <<'PY'
 import socket
 with socket.socket() as sock:
@@ -24,6 +25,7 @@ SEARXNG_SECRET=$(python3 -c 'import secrets; print(secrets.token_urlsafe(48))')
 
 cleanup() {
   docker compose -p "$project" down --volumes --remove-orphans >/dev/null 2>&1 || true
+  docker network rm "$untrusted_network" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT INT TERM
 
@@ -92,19 +94,19 @@ print(f"JSON_SEARCH_RESULTS={len(results)}")
 print("JSON_SEARCH_ENVELOPE_VALID=true")
 PY
 
-# A host-origin request is outside the allowlisted stack subnet and must get 403.
-python3 - "$port" <<'PY'
+# Attach ingress to a second, test-only network whose CIDR is not allowlisted.
+docker network create --subnet 10.253.251.0/24 "$untrusted_network" >/dev/null
+docker network connect --alias ingress "$untrusted_network" "$ingress_id"
+deny_output=$(docker run --rm \
+  --network "$untrusted_network" \
+  --entrypoint sh \
+  docker.io/library/caddy@sha256:4c6e91c6ed0e2fa03efd5b44747b625fec79bc9cd06ac5235a779726618e530d \
+  -c 'wget -S -O /dev/null http://ingress:8080/healthz' 2>&1 || true)
+python3 - "$deny_output" <<'PY'
 import sys
-import urllib.error
-import urllib.request
-try:
-    urllib.request.urlopen(f"http://127.0.0.1:{sys.argv[1]}/healthz", timeout=10)
-except urllib.error.HTTPError as exc:
-    if exc.code != 403:
-        raise SystemExit(f"non-allowlisted request returned HTTP {exc.code}, expected 403")
-    print("NON_ALLOWLISTED_HTTP=403")
-else:
-    raise SystemExit("non-allowlisted request unexpectedly succeeded")
+if "403" not in sys.argv[1]:
+    raise SystemExit("non-allowlisted request did not return HTTP 403")
+print("NON_ALLOWLISTED_HTTP=403")
 PY
 
 # The synthetic query must not be retained in container logs.
@@ -124,6 +126,10 @@ if [ -n "$(docker ps -aq --filter "label=com.docker.compose.project=${project}")
 fi
 if docker network inspect "$network" >/dev/null 2>&1; then
   printf 'Compose-owned network remains after cleanup\n' >&2
+  exit 1
+fi
+if docker network inspect "$untrusted_network" >/dev/null 2>&1; then
+  printf 'Test-only untrusted network remains after cleanup\n' >&2
   exit 1
 fi
 if docker volume ls -q --filter "label=com.docker.compose.project=${project}" | python3 -c 'import sys; raise SystemExit(0 if sys.stdin.read().strip() else 1)'; then
